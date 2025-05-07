@@ -8,17 +8,20 @@ import boto3
 import time
 import logging
 from io import StringIO
-import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from tempfile import mkdtemp
+from fake_useragent import UserAgent
 
+
+logging.basicConfig(level=logging.DEBUG, format='$(asctime)s - $(levelname)s - $(message)s')
 
 def scrap_gofood(url, total_merch, total_reviews_page):
-    
+
     chrome_options = ChromeOptions()
+    ua = UserAgent()
+    user_agent = ua.random
+    chrome_options.add_argument(f"--user-agent-{user_agent}")
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
@@ -46,7 +49,7 @@ def scrap_gofood(url, total_merch, total_reviews_page):
     )
 
     driver.get(url)
-    time.sleep(3)
+    time.sleep(10)
     soup = BeautifulSoup(driver.page_source, 'html.parser')
 
     data = [] 
@@ -60,12 +63,12 @@ def scrap_gofood(url, total_merch, total_reviews_page):
         for href in hrefs[:total_merch]:
             try:
                 driver.get(href)
-                time.sleep(5)
+                time.sleep(10)
 
                 review_url = driver.current_url + '/reviews'
                 driver.get(review_url)
                 WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'What people say') or contains(text(), 'All reviews')]")))
-                time.sleep(5)
+                time.sleep(10)
 
                 for _ in range(total_reviews_page):
                     try: 
@@ -121,22 +124,20 @@ def scrap_gofood(url, total_merch, total_reviews_page):
 
     return pd.DataFrame(data)
 
-S3_BUCKET = ''
 def upload_s3(df, file_name):
     s3 = boto3.client('s3')
     csv_buffer = StringIO()
     df.to_csv(csv_buffer, index=False)
-    s3.put_object(Bucket=S3_BUCKET, key=f"{file_name}", Body=csv_buffer.getValue())
+    s3.put_object(Bucket='rdv-bucket-project', Key=f"{file_name}", Body=csv_buffer.getvalue())
     
 def lambda_process(event, context):
 
     gofood_review = scrap_gofood(url = 'https://gofood.co.id/en/malang/restaurants/best_seller', 
                                  total_merch = 10, 
                                  total_reviews_page = 3)
-    
-    upload_s3(gofood_review, 'review_gofood.csv')
-    
-    return {
-        'statusCode' : 200,
-        'body' : 'Data uploaded successfully'
-    }
+
+    if not gofood_review.empty:
+        upload_s3(gofood_review, 'review_gofood.csv')
+        return {'statusCode': 200, 'body': 'Data uploaded successfully'}
+    else:
+        return {'statusCode': 500, 'body': 'No data scraped.'}

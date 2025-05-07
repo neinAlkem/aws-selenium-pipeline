@@ -4,17 +4,23 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from fake_useragent import UserAgent
 import time
 import logging
 import argparse
 
 def scrap_gofood(url, total_merch, total_reviews_page):
 
+    ua = UserAgent()
+    user_agent = ua.random
+
     options = webdriver.ChromeOptions()
+    options.add_argument(f'--user-agent={user_agent}')
     options.add_argument('--start-maximized')
+    options.add_argument('--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
     driver = webdriver.Chrome(options=options)
     driver.get(url)
-    time.sleep(3)
+    time.sleep(10)
     soup = BeautifulSoup(driver.page_source, 'html.parser')
 
     data = [] 
@@ -28,18 +34,18 @@ def scrap_gofood(url, total_merch, total_reviews_page):
         for href in hrefs[:total_merch]:
             try:
                 driver.get(href)
-                time.sleep(5)
+                time.sleep(10)
 
                 review_url = driver.current_url + '/reviews'
                 driver.get(review_url)
                 WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'What people say') or contains(text(), 'All reviews')]")))
-                time.sleep(5)
+                time.sleep(10)
 
                 for _ in range(total_reviews_page):
                     try: 
                         load_button = WebDriverWait(driver, 5).until(EC.element_to_be_clickable(By.XPATH, "//button[.//span[text()='Load more']]"))
                         load_button.click()
-                        time.sleep(2)
+                        time.sleep(10)
                     except:
                         break
                     

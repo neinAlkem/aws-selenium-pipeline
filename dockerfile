@@ -15,9 +15,10 @@ RUN ./chrome-installer.sh
 RUN rm ./chrome-installer.sh
 
 # Install selenium
+COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Copy the main application code
-COPY lambda_aws.py .
+COPY lambda_aws.py ./
 # Command to run the Lambda function
-CMD [ "main.lambda_handler" ]
+CMD [ "lambda_aws.lambda_process" ]
