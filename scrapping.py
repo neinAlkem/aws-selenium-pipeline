@@ -40,6 +40,7 @@ def scrap_gofood(url, total_merch, total_reviews_page):
                 driver.get(review_url)
                 WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'What people say') or contains(text(), 'All reviews')]")))
                 time.sleep(10)
+            
 
                 for _ in range(total_reviews_page):
                     try: 
@@ -105,6 +106,5 @@ def main():
     args = parser.parse_args()
 
     scrap_gofood(args.url, args.total_merch, args.total_reviews_page)
-
 if __name__=="__main__":
       main()
