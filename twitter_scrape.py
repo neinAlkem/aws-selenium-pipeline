@@ -1,6 +1,5 @@
-
 import asyncio
-from twscrape import API
+from twscrape_lambda import API
 from contextlib import aclosing
 import os
 from dotenv import load_dotenv
