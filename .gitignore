@@ -1,3 +1,7 @@
 rdv_env
 .env
 accounts.db
+makefile
+__pycache__/
+/*.csv
+

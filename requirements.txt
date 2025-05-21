@@ -5,3 +5,4 @@ boto3
 fake_useragent
 numpy
 pytz
+twscrape
