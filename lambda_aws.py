@@ -18,36 +18,46 @@ logging.basicConfig(level=logging.DEBUG, format='$(asctime)s - $(levelname)s - $
 
 def scrap_gofood(url, total_merch, total_reviews_page):
 
-    chrome_options = ChromeOptions()
-    ua = UserAgent()
-    user_agent = ua.random
-    chrome_options.add_argument(f"--user-agent-{user_agent}")
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-dev-tools")
-    chrome_options.add_argument("--no-zygote")
-    chrome_options.add_argument("--single-process")
-    chrome_options.add_argument(f"--user-data-dir={mkdtemp()}")
-    chrome_options.add_argument(f"--data-path={mkdtemp()}")
-    chrome_options.add_argument(f"--disk-cache-dir={mkdtemp()}")
-    chrome_options.add_argument("--remote-debugging-pipe")
-    chrome_options.add_argument("--verbose")
-    chrome_options.add_argument("--log-path=/tmp")
-    chrome_options.add_argument('--start-maximized')
-    chrome_options.binary_location = "/opt/chrome/chrome-linux64/chrome"
+    # chrome_options = ChromeOptions()
+    # ua = UserAgent()
+    # user_agent = ua.random
+    
+    # chrome_options.add_argument(f"--user-agent-{user_agent}")
+    # chrome_options.add_argument("--headless=new")
+    # chrome_options.add_argument("--no-sandbox")
+    # chrome_options.add_argument("--disable-dev-shm-usage")
+    # chrome_options.add_argument("--disable-gpu")
+    # chrome_options.add_argument("--disable-dev-tools")
+    # chrome_options.add_argument("--no-zygote")
+    # chrome_options.add_argument("--single-process")
+    # chrome_options.add_argument(f"--user-data-dir={mkdtemp()}")
+    # chrome_options.add_argument(f"--data-path={mkdtemp()}")
+    # chrome_options.add_argument(f"--disk-cache-dir={mkdtemp()}")
+    # chrome_options.add_argument("--remote-debugging-pipe")
+    # chrome_options.add_argument("--verbose")
+    # chrome_options.add_argument("--log-path=/tmp")
+    # chrome_options.add_argument('--start-maximized')
+    # chrome_options.binary_location = "/opt/chrome/chrome-linux64/chrome"
 
     service = Service(
-        executable_path="/opt/chrome-driver/chromedriver-linux64/chromedriver",
-        service_log_path="/tmp/chromedriver.log"
-    )
+         executable_path="/opt/chrome-driver/chromedriver-linux64/chromedriver",
+         service_log_path="/tmp/chromedriver.log"
+     )
 
-    driver = webdriver.Chrome(
-        service=service,
-        options=chrome_options
-    )
+    # driver = webdriver.Chrome(service=service),
+    #     options=chrome_options
+    # )
 
+    # driver.get(url)
+    # time.sleep(10)
+    # soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+
+    options = webdriver.ChromeOptions()
+    options.binary_location = "/opt/chrome/chrome-linux64/chrome"
+    options.add_argument('--start-maximized')
+    options.add_argument('--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
+    driver = webdriver.Chrome( service=service, options=options)
     driver.get(url)
     time.sleep(10)
     soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -64,7 +74,7 @@ def scrap_gofood(url, total_merch, total_reviews_page):
             try:
                 driver.get(href)
                 time.sleep(10)
-
+            
                 review_url = driver.current_url + '/reviews'
                 driver.get(review_url)
                 WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'What people say') or contains(text(), 'All reviews')]")))
