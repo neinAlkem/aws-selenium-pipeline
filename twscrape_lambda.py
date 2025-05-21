@@ -16,20 +16,89 @@ import asyncio
 from twscrape import API
 from contextlib import aclosing
 import pandas as pd
+import numpy as np
+import re
+import pytz
+import string
+import os 
+from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.DEBUG, format='$(asctime)s - $(levelname)s - $(message)s')
+
+food_drink_terms = set("""
+bakso sate soto rawon pecel nasi goreng ayam goreng ayam geprek
+mie ayam mie ayam geprek indomie ramen udon sushi sashimi pizza burger
+kebab shawarma rendang gudeg lalapan dimsum siomay batagor lumpia martabak
+roti kue brownies cheesecake croissant donat waffle pancake puding eskrim gelato
+kopi latte cappuccino espresso americano matcha boba bubble es  teh soda cola sprite fanta
+jus smoothie milkshake
+""".split())
+
+# ── Helper fungsi ────────────────────────────────────────────────────
+STAR_RE = re.compile('[⭐★]')
+NUM_RE = re.compile(r'([1-5])\s*/\s*5')
+WORD_RE = re.compile(r'(?i)bintang\s+([1-5])')
+SHOP_RE = re.compile(r'\b(?:di|at)\s+([A-Z][\w&\'\-\.]*(?:\s+[A-Z][\w&\'\-\.]*){0,3})')
+
+tz = pytz.timezone('Asia/Jakarta')
+
+def clean(txt: str) -> str:
+    txt = re.sub(r'http\S+|@\w+|#\w+', '', txt)   # hapus URL, mention, hashtag
+    txt = re.sub(r'\s+', ' ', txt).strip()
+    return txt
+
+def rating(txt: str):
+    stars = len(STAR_RE.findall(txt))
+    if 1 <= stars <= 5: return stars
+    m = NUM_RE.search(txt) or WORD_RE.search(txt)
+    return int(m.group(1)) if m else np.nan
+
+def produk(txt: str):
+    words = [w.lower().strip(string.punctuation) for w in txt.split()]
+    for i, w in enumerate(words):
+        if w in food_drink_terms: return w.title()
+        # cek bigram
+        if i < len(words)-1:
+            bigram = f"{w} {words[i+1]}"
+            if all(x in food_drink_terms for x in bigram.split()):
+                return bigram.title()
+    return np.nan
+
+def toko(txt: str):
+    m = SHOP_RE.search(txt)
+    if m: return m.group(1).strip()
+    ment = re.search(r'@(\w+)', txt)  # fallback username mention
+    return ment.group(1) if ment else np.nan
+
+def tanggal(ts):
+    try:
+        return pd.to_datetime(ts, utc=True).tz_convert(tz).strftime('%d %B %Y')
+    except: return np.nan
+
+def transform_tweets(df_tweets):
+    def transform_row(row):
+        raw = str(row['content'])
+        return pd.Series({
+            'merchant_name': toko(raw),
+            'date_review': tanggal(row['date']),
+            'product_name': produk(raw),
+            'review': clean(raw),
+            'rating': rating(raw),
+        })
+    
+    return df_tweets.apply(transform_row, axis=1)
 
 async def scrape_twitter(query: str, max_results: int = 50):
     api = API("/tmp/twscrape.db")
 
-    cookies = "auth_token=4214a8c209ad0cb3d8631d5039a38f2b4bfccdc0; ct0=86088b9a59d9fdc9505110aaeb3939a57f846240052a5f40bcb051186e1bae009316eb82a0d13353c3a9bf08f63c5e1a3afcdfe0f34963c22f22b4f3e9aab668e96f7f2362bd1bf91524e4463217aad1"
+    cookies = os.getenv("COOKIES")
 
     await api.pool.delete_accounts("skrepingkuliah")
     acc = await api.pool.add_account(
-        username="skrepingkuliah",
-        password="whyscrapingsohardla!123",
-        email="rulcollegedummy@gmail.com",
-        email_password="Pantsondummy!123",
+        username=os.getenv("USERNAME"),
+        # password=os.getenv("PASSWORD"),
+        email=os.getenv("EMAIL"),
+        email_password=os.getenv("EMAIL_PASS"),
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         cookies=cookies
     )    
@@ -172,8 +241,10 @@ def main():
     
     print("Starting Twitter Scraping Process...")
     df_tweets = asyncio.run(scrape_twitter(query="makanan di malang"))
-    df_tweets.to_csv("/tmp/tweets_review.csv", index=False)
-    upload_s3(df_tweets, "tweets_reviews.csv")
+    print("Transforming Twitter Scrape Result...")
+    df_tweets_transform = transform_tweets(df_tweets)
+    df_tweets_transform.to_csv("/tmp/tweet_reviews_transform.csv",index=False)
+    upload_s3(df_tweets_transform, "tweets_reviews.csv")
     
     print("Starting GoFood Scraping Process...")
     df_gofood = scrap_gofood("https://gofood.co.id/en/malang/restaurants/best_seller", 10, 3)
