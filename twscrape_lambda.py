@@ -1,7 +1,7 @@
 import pandas as pd
-import datetime as dt
 import time
 import logging
+from tempfile import mkdtemp
 from io import StringIO
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -16,37 +16,8 @@ import asyncio
 from twscrape import API
 from contextlib import aclosing
 import pandas as pd
-from fake_useragent import UserAgent
 
-def setup_driver():
-    chrome_path = "/opt/chrome/chrome-linux64/chrome"
-    chromedriver_path = "/opt/chrome-driver/chromedriver-linux64/chromedriver"
-
-    options = Options()
-    options.binary_location = chrome_path
-    options.add_argument("--headless=chrome")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--single-process")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-software-rasterizer")
-    options.add_argument("--window-size=1280x800")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--single-process")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-software-rasterizer")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--remote-debugging-port=9222")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--headless")  
-
-    service = Service(executable_path=chromedriver_path)
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
+logging.basicConfig(level=logging.DEBUG, format='$(asctime)s - $(levelname)s - $(message)s')
 
 async def scrape_twitter(query: str, max_results: int = 50):
     api = API("/tmp/twscrape.db")
@@ -84,68 +55,111 @@ async def scrape_twitter(query: str, max_results: int = 50):
         
 # ========== SCRAPE GOFOOD ==========
 def scrap_gofood(url, total_merch, total_reviews_page):
-    ua = UserAgent()
-    user_agent = ua.random
+       
+    chrome_options = ChromeOptions()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-dev-tools")
+    chrome_options.add_argument("--no-zygote")
+    chrome_options.add_argument("--single-process")
+    chrome_options.add_argument(f"--user-data-dir={mkdtemp()}")
+    chrome_options.add_argument(f"--data-path={mkdtemp()}")
+    chrome_options.add_argument(f"--disk-cache-dir={mkdtemp()}")
+    chrome_options.add_argument("--remote-debugging-pipe")
+    chrome_options.add_argument("--verbose")
+    chrome_options.add_argument("--log-path=/tmp")
+    chrome_options.add_argument('--start-maximized')
+    chrome_options.binary_location = "/opt/chrome/chrome-linux64/chrome"
 
-    options = webdriver.ChromeOptions()
-    options.add_argument(f'--user-agent={user_agent}')
-    options.add_argument('--start-maximized')
-    options.add_argument('--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
-    driver = webdriver.Chrome(options=options)
+    service = Service(
+        executable_path="/opt/chrome-driver/chromedriver-linux64/chromedriver",
+        service_log_path="/tmp/chromedriver.log"
+    )
+
+    driver = webdriver.Chrome(
+        service=service,
+        options=chrome_options
+    )
+
     driver.get(url)
-    time.sleep(10)
+    time.sleep(3)
     soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    data = [] 
+
     container = soup.find('div', class_='my-6 grid grid-cols-1 md:grid-cols-2 md:gap-6 lg:grid-cols-4 lg:gap-6 -mx-6 md:mx-0')
-    data = []   
+
     if container:
         links = container.find_all('a', href=True)
         hrefs = ['https://gofood.co.id' + a['href'] for a in links]
+
         for href in hrefs[:total_merch]:
             try:
                 driver.get(href)
-                time.sleep(8)
-                driver.get(driver.current_url + '/reviews')
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'h2')))
+                time.sleep(5)
+
+                review_url = driver.current_url + '/reviews'
+                driver.get(review_url)
+                WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'What people say') or contains(text(), 'All reviews')]")))
                 time.sleep(5)
 
                 for _ in range(total_reviews_page):
-                    try:
-                        load_button = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[text()='Load more']]")))
+                    try: 
+                        load_button = WebDriverWait(driver, 5).until(EC.element_to_be_clickable(By.XPATH, "//button[.//span[text()='Load more']]"))
                         load_button.click()
                         time.sleep(2)
                     except:
                         break
-
+                    
                 review_soup = BeautifulSoup(driver.page_source, 'html.parser')
-                partner_name = review_soup.find('h1')
-                merchant_name = partner_name.text.strip() if partner_name else "Unknown"
+                all_reviews = review_soup.find('div', class_='mx-auto w-[calc(100%_-_48px)] max-w-wrapper py-6 md:w-[calc(100%_-_64px)] lg:pb-16')
 
-                stars = review_soup.find_all('div', class_=lambda x: x and 'flex items-center' in x)
-                reviews = review_soup.find_all('div', class_=lambda x: x and 'bg-gf-background-fill-primary' in x)
-                dates = review_soup.find_all('div', class_=lambda x: x and 'text-gf-content-muted' in x)
+                if not all_reviews:
+                    print("No reviews found.")
+                    break
+                
+                stars_container = review_soup.find_all('div', class_=lambda x: x and 'flex items-center' in x)
+                date_container = review_soup.find_all('div', class_=lambda x:x and 'mt-4 text-gf-content-muted gf-body-s' in x)
+                merch_title = review_soup.find('div', class_=lambda x: x and 'flex gap-4 mb-8' in x)
+                review_containers = review_soup.find_all('div', class_=lambda x: x and 'bg-gf-background-fill-primary' in x)
+                partner_name_tag = merch_title.find('h1', class_=lambda x: x and 'text-gf-content-primary' in x) if merch_title else None
+                partner_name = partner_name_tag.text.strip() if partner_name_tag else "Unknown Merchant"
 
-                for star, review_block, date_tag in zip(stars, reviews, dates):
-                    review_tag = review_block.find('p')
-                    if not review_tag:
-                        continue
-                    product_tag = review_block.find('span')
-                    rating_tag = star.find('span')
-                    data.append({
-                        'merchant_name': merchant_name,
-                        'date_review': date_tag.text.strip().replace('Purchased on', '').strip(),
-                        'product_name': product_tag.text.strip() if product_tag else 'Unknown',
-                        'review': review_tag.text.strip(),
-                        'rating': rating_tag.text.strip() if rating_tag else '0',
-                    })
+                for stars, container, date in zip(stars_container, review_containers, date_container):
+                        try:
+                            review_tag = container.find('p', class_=lambda x: x and 'break-words' in x)
+                            if not review_tag or not review_tag.text.strip():
+                                continue  
+                            product_tag = container.find('span', class_=lambda x: x and 'ml-2 break-words md:mt-1' in x)
+                            rating_tag = stars.find('span', class_=lambda x: x and 'ml-1 inline-block' in x)
+                            
+                            date_review = date.text.strip() if date else 'No date'
+                            date_review = date_review.replace('Purchased on','').strip()
+                            review_text = review_tag.text.strip() if review_tag else 'No review'
+                            product_name = product_tag.text.strip() if product_tag else 'No product'
+                            rating_text = rating_tag.text.strip() if rating_tag else 'No rating'
+
+                            data.append({
+                                'merchant_name': partner_name,
+                                'date_review' : date_review,
+                                'product_name': product_name,
+                                'review': review_text,
+                                'rating': rating_text,
+                            })
+
+                        except Exception as e:
+                            logging.error(f'Error scraping review: {e}')
+
             except Exception as e:
-                logging.error(f"Gagal proses {href}: {e}")
-        driver.quit()
+                print(f'Failed to process {href}: {str(e)}')
+
+    driver.quit()
+
     return pd.DataFrame(data)
 
-
-# ========== UPLOAD KE S3 ==========
+# ========== UPLOAD TO S3 ==========
 def upload_s3(df, file_name):
     s3 = boto3.client('s3')
     csv_buffer = StringIO()
