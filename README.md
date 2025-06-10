@@ -35,7 +35,7 @@ Use IAM for permission control and CloudWatch for logs and monitoring, adhering 
 | `AWS CloudWatch`  | `Logs and monitors Lambda function execution` | 
 | `AWS EventBridge` | `Triggers Lambda function at defined intervals` | 
 | `AWS IAM`       | `Manages secure, minimal-permission access control` | 
-| `AWS ECR` | `	Stores Docker container image used by Lambda` |
+| `AWS ECR` | `Stores Docker container image used by Lambda` |
 
 ## Getting Started
 ### Prerequisite
