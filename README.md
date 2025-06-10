@@ -1,5 +1,5 @@
 # GoFood & Twitter Review ETL Pipeline using AWS Lambda & Docker
-![Pipeline Image](assets/rdv_pipeline.png)
+![Pipeline Image](assets/image.png)
 
 This project is designed to automate the extraction, transformation, and loading (ETL) of user review data from two main sources: GoFood (a food delivery web platform) and Twitter. The solution leverages serverless technologies from AWS, particularly AWS Lambda with container support, enabling custom environments for complex scraping tasks using tools like Selenium.
 
